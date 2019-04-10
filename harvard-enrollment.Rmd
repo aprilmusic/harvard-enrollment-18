@@ -1,0 +1,92 @@
+---
+title: "Harvard Enrollment 2019 Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(dplyr)
+library(RColorBrewer)
+library(colorRamps)
+library(cowplot)
+library(grid)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo = FALSE, cache = TRUE, warning = FALSE}
+# Data from Spring 2019
+download.file("https://registrar.fas.harvard.edu/files/fas-registrar/files/class_enrollment_summary_by_term_3.22.19.xlsx", "enrollment19.xlsx", mode = "wb")
+# Read in the file, skipping three lines of header
+enrollment19 <- read_xlsx("enrollment19.xlsx", skip = 3) %>% 
+  # Clean names
+  clean_names() %>%
+  # Only get the course information and u_grad
+  select(1:8)
+# Data from Spring 2018
+download.file("https://registrar.fas.harvard.edu/files/fas-registrar/files/class_enrollment_summary_by_term_03.06.18.xlsx", "enrollment18.xlsx", mode = "wb", quiet = TRUE)
+enrollment18 <- read_xlsx("enrollment18.xlsx", skip = 3) %>% 
+  clean_names() %>%
+  select(1:8)
+# Data from Spring 2017
+download.file("http://registrar.fas.harvard.edu/files/fas-registrar/files/class_enrollment_summary_by_term_2017_03_07_final_0.xlsx", "enrollment17.xlsx", mode = "wb", quiet = TRUE)
+enrollment17 <- read_xlsx("enrollment17.xlsx", skip = 3) %>% 
+  clean_names() %>%
+  select(1:8)
+# Remove all files now that we're done with them, without reporting warnings
+invisible(file.remove("enrollment17.xlsx"))
+invisible(file.remove("enrollment18.xlsx"))
+invisible(file.remove("enrollment19.xlsx"))
+```
+Total undergraduate enrollment in each department in Spring 2017, 2018, 2019. The size of each point indicates how many classes in that department were taken by undergraduates. This plot only takes into account departments that had a total enrollment of over 100 and more than 10 classes.
+```{r echo = FALSE, cache = TRUE, warning = FALSE, fig.fullwidth=TRUE, fig.width=10, fig.height=10}
+# Combine the three years with year as a new column
+all_enroll <- bind_rows(list(enrollment17, enrollment18, enrollment19), .id = "year")%>%
+  # Make year the correct year rather than 1 2 and 3
+  mutate(year = as.character(as.numeric(year) + 2016)) %>%
+  # Don't want NA course_name, and want u_grad to be > 5
+  filter(as.numeric(u_grad > 0), !is.na(course_name)) %>%
+  # Want to analyze by year and department
+  group_by(year, course_department) %>%
+  # Get the number of undergrads total, and the number of classes
+  summarize(enrollment = sum(u_grad), num_classes = n()) %>%
+  # Only departments that have nontrivial amounts of undergraduates
+  filter(enrollment > 100, num_classes > 10) %>%
+  # Rename so the plot is prettier
+  rename("Year" = "year", "Enrollment" = "enrollment", "Classes" = "num_classes")
+
+# We're going to need a huge color palette! So let's figure out how many departments there are, and based on that...
+colourCount <- length(unique(all_enroll$course_department)) # number of levels
+# Brew a new palette based on Set1 
+getPalette <- colorRampPalette(brewer.pal(9, "Set1"))(colourCount)
+
+# Plot!
+p <- ggplot(all_enroll, aes(x = Year, y = Enrollment)) +
+  # Violin plot that's sort of clear for each year and the total enrollment
+  geom_violin(alpha = 0.4) + 
+  # Jitter each department on top
+  geom_jitter(aes(color = course_department, size = Classes), width = 0.2) +
+  # Put in the colors using our nice new palette
+  scale_color_manual(values = getPalette) +
+  # Move the legend to the bottom since it's going to be huge
+  theme(legend.position = "bottom", legend.key.size = unit(0.2, "cm"), legend.direction="horizontal") + 
+  # Change the legend so it actually fits
+  guides(color = guide_legend(ncol=3, keywidth=0.001, keyheight=0.001, default.unit="inch", byrow=TRUE, title.theme = element_blank()))
+
+p
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
